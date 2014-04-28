@@ -1,0 +1,246 @@
+#!/bin/bash
+
+IPADDRESS=192.168.56.101
+NETMASK=255.255.255.0
+INTERFACE=eth1
+
+PROJECT_NAME=Tester #no spaces!
+
+FILESURL=https://raw.githubusercontent.com/draftchallenge/continuous-integration-setup/master/
+
+WITH_PAUSE_AFTER_EACH_STEP=true
+
+#####################################################################################
+#see bottom first
+#####################################################################################
+
+checkPermissions() {
+    if [[ $EUID -ne 0 ]]; then
+        exitWithError "This script must run as root"
+    fi
+}
+
+addJenkinsToAptList() {
+    echo "01/11 Adding Jenkins to apt repository"
+    
+    file=/etc/apt/sources.list.d/jenkins.list
+    
+    rm -f $file
+    
+    wget -q -O - http://pkg.jenkins-ci.org/debian/jenkins-ci.org.key | sudo apt-key add -
+    echo "deb http://pkg.jenkins-ci.org/debian binary/" > $file
+    pause
+}
+
+installPackages() {
+    echo "02/11 Installing updates and packages - please be patient"
+    
+    apt-get -q update
+    apt-get -q -y --force-yes install openjdk-7-jdk subversion apache2 libapache2-svn python-setuptools libapache2-mod-python enscript jenkins trac sqlite3 openssh-server
+    #apt-get -q -y --force-yes install openjdk-7-jdk subversion apache2=2.2.22-1ubuntu1.5 libapache2-svn python-setuptools libapache2-mod-python enscript jenkins=1.557 trac=0.12.2-1build1 sqlite3 openssh-server
+    
+    pause
+}
+
+getFilesFromGithub() {
+    echo "03/11 Downloading files from Github for setup"
+    
+    rm -rf files/
+    rm -f adduser
+    rm -f rollback
+    
+    mkdir -p files/
+    local files=( "/apache_dav_svn.conf" "/apache_jenkins" "/apache_ports.conf" "/apache_python.conf" "/default_jenkins" "/svn_post-commit" "/svn_trac-hook" "/www_index.html" )
+    
+    for i in "${files[@]}"
+    do
+        wget -q $FILESURL"files"$i -O "files/$i"
+    done
+    wget -q $FILESURL"adduser" -O adduser
+    wget -q $FILESURL"rollback" -O rollback
+    
+    pause
+}
+
+prepareLocalNetwork() {
+    echo "04/11 Preparing local host only network at $INTERFACE with $IPADDRESS"
+    
+    ifconfig $INTERFACE $IPADDRESS netmask $NETMASK
+
+    file="/etc/ssh/sshd_config"
+
+    restoreFromBakFileIfExisitsAndCreate $file
+    
+    echo "ListenAddress $IPADDRESS" >> $file
+    echo "ListenAddress 127.0.0.1" >> $file
+    
+    pause
+}
+
+prepareApache() {
+    echo "05/11 Preparing Apache with mods, index file and ports"
+    
+    a2enmod proxy
+    a2enmod proxy_http
+    a2enmod rewrite
+
+    cp files/www_index.html /var/www/index.html
+    chown www-data:www-data /var/www/index.html
+
+    file=/etc/apache2/ports.conf
+    restoreFromBakFileIfExisitsAndCreate $file
+    
+    cp files/apache_ports.conf $file
+    sed -i "s/IPADDRESS/$IPADDRESS/g" $file
+    
+    pause
+}
+
+prepareDAV() {
+    echo "06/11 Preparing DAV for login and other services"
+    
+    file=/etc/apache2/mods-enabled/dav_svn.conf
+    restoreFromBakFileIfExisitsAndCreate $file
+
+    cp files/apache_dav_svn.conf $file
+    chown www-data:www-data $file
+
+    touch /etc/apache2/dav_svn.passwd
+    
+    pause
+}
+
+prepareSubversion() {
+    echo "07/11 Preparing Subversion and Hooks to Trac and Jenkins"
+    
+    dir=/var/svn
+    
+    rm -rf $dir
+    
+    mkdir $dir
+    svnadmin create $dir/repos
+    chown -R www-data:www-data $dir
+
+    prepareHook $dir post-commit
+    prepareHook $dir trac-hook
+    
+    echo "http://localhost/jenkins/job/$PROJECT_NAME/build" >> $dir/repos/hooks/post-commit
+    
+    pause
+}
+
+prepareTrac() {
+    echo "08/11 Prepare Trac and connect to SVN and Apache"
+    dir=/var/www/trac/repos
+    
+    rm -rf $dir
+    mkdir -p $dir
+
+    trac-admin $dir initenv "$PROJECT_NAME" sqlite:db/trac.db svn /var/svn/repos
+
+    chown -R www-data.www-data /var/www/trac
+
+    cp files/apache_python.conf /etc/apache2/mods-enabled/python.conf
+    chown root:root /etc/apache2/mods-enabled/python.conf
+    
+    pause
+}
+
+prepareJenkins() {
+    echo "09/11 Prepare Jenkins and disable default site, enable jenkins site"
+    
+    rm -f /etc/apache2/sites-available/jenkins
+    cp files/default_jenkins /etc/default/jenkins
+
+    cp files/apache_jenkins /etc/apache2/sites-available/jenkins
+
+    a2dissite default
+    a2ensite jenkins
+    
+    pause
+}
+
+restartServices() {
+    echo "10/11 Restart services"
+    service jenkins restart
+    service apache2 restart
+    service ssh restart
+    
+    pause
+}
+
+testSetup() {
+    echo "11/11 Verifying setup - be patient as script needs to wait (30s) until all services are running"
+    
+    sleep 30
+    
+    netstat=`netstat -tunl`
+    checkService "$netstat" "127.0.0.1:22"
+    checkService "$netstat" "$IPADDRESS:22"
+
+    checkService "$netstat" "127.0.0.1:80"
+    checkService "$netstat" "$IPADDRESS:80"
+
+    checkService "$netstat" "127.0.0.1:8080"
+
+    checkHTTP http://localhost/ "HTTP/1.1 200 OK"
+    checkHTTP http://localhost/jenkins/ "HTTP/1.1 401 Authorization Required"
+    checkHTTP http://localhost/svn/ "HTTP/1.1 401 Authorization Required"
+    checkHTTP http://localhost/trac/ "HTTP/1.1 401 Authorization Required"
+
+    rm -rf files/
+    
+    echo "...Done."
+    echo "Don't forget to run 'bash ./adduser <User name>' to add users for authentication."
+}
+
+pause() {
+    if [ "$WITH_PAUSE_AFTER_EACH_STEP" = true ]; then
+        read -p "Done. Press [Enter] key to continue"
+    fi
+}
+
+prepareHook() {
+    cp files/svn_$2 $1/repos/hooks/$2
+    chown www-data:www-data $1/repos/hooks/$2
+    chmod +x $1/repos/hooks/$2
+}
+
+checkService() {
+    if [[ ! $1 =~ $2 ]]; then
+        exitWithError "Setup was not correct: $2 is not running"
+    fi
+}
+
+checkHTTP() {
+    result=`curl -sI $1`
+    if [[ ! "$result" == "$2"* ]]; then
+        exitWithError "Setup was not correct: $1 is not OK"
+    fi
+}
+
+restoreFromBakFileIfExisitsAndCreate() {
+    if [ -f "$1.bak" ]; then
+        cp "$1".bak "$1"
+    fi
+    cp "$1" "$1".bak
+}
+
+exitWithError() {
+    echo "$1" 1>&2
+    echo "...Abort" 1>&2
+    exit 1
+}
+
+checkPermissions
+addJenkinsToAptList
+installPackages
+getFilesFromGithub
+prepareLocalNetwork
+prepareApache
+prepareDAV
+prepareSubversion
+prepareTrac
+prepareJenkins
+restartServices
+testSetup

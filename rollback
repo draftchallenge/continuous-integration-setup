@@ -1,0 +1,27 @@
+#!/bin/bash
+
+echo "Warning: This will delete all files and modifications made within /var/svn, /var/www and /etc/apache2."
+read -p "Press [Enter] key to continue or [Ctrl+C] to abort"
+
+if [[ $EUID -ne 0 ]]; then
+    echo "This script must be run as root" 1>&2
+    echo "...Abort" 1>&2
+    exit 1
+fi
+
+service apache2 stop > /dev/null
+service jenkins stop > /dev/null
+
+rm -f /etc/apt/sources.list.d/jenkins.list
+rm -rf /etc/apache > /dev/null
+rm -rf /var/svn > /dev/null
+rm -rf /var/www > /dev/null
+rm -f /etc/default/jenkins > /dev/null
+
+apt-get remove openjdk-7-jdk subversion apache2 libapache2-svn python-setuptools libapache2-mod-python enscript jenkins trac sqlite3
+apt-get update
+apt-get autoremove
+
+mv -f /etc/ssh/sshd_config.bak /etc/ssh/sshd_config > /dev/null
+
+service ssh restart

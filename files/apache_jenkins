@@ -1,0 +1,23 @@
+<VirtualHost *:80>
+    ServerAdmin root@localhost
+    ServerName ubuntu-v
+    ServerAlias ci
+    ProxyRequests Off
+    AllowEncodedSlashes NoDecode
+
+    DocumentRoot /var/www/
+
+    <Proxy http://localhost:8080/jenkins*>
+        Order deny,allow
+        Allow from all
+        
+        AuthType Basic
+        AuthName "Jenkins"
+        AuthUserFile /etc/apache2/dav_svn.passwd
+        Require valid-user
+    </Proxy>
+
+    ProxyPreserveHost on
+    ProxyPass         /jenkins http://localhost:8080/jenkins/ nocanon
+    ProxyPassReverse    /jenkins http://localhost:8080/jenkins/
+</VirtualHost>

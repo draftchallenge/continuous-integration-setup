@@ -1,0 +1,100 @@
+<html>
+<head>
+    <title>Welcome</title>
+    <meta charset="utf-8"> 
+    <meta name="author" content="Mario Neises">
+    <style>
+        body {font-family: Arial, Helvetica}
+        li  {margin-top: 10px}
+        pre {margin: 5px}
+        div.hidden {display: none}
+        h3:hover {color: blue; cursor: pointer; cursor: hand}
+		hr {border: 1px solid #ddd}
+    </style>
+</head>
+<body>
+    <h1>Welcome</h1>
+    <h2>Links</h2>
+    <ul>
+        <li><a href="/svn">Svn</a></li>
+        <li><a href="/trac">Trac</a></li>
+        <li><a href="/jenkins/">Jenkins</a></li>
+    </ul>
+    <hr>
+    <h2>Setup and introduction</h2>
+	
+    <h3 onclick="javascript:toggle('p1')">&#9660; Server</h3>
+    <div class="hidden" id="p1">
+        <ol>
+            <li><b>Set time</b>: <divre>date -s "2 OCT 2006 18:00:00"</pre> Keep in mind if your VM suspends time might be not accurate any more.</li>
+        </ol>
+		<hr>
+    </div>
+	
+    <h3 onclick="javascript:toggle('p2')">&#9660; SVN</h3>
+    <div class="hidden" id="p2">
+        <ol>
+            <li><b>Start your IDE</b>: (here Intellij) and create new project - no checkout from version control or something</li>
+            <li><b>Cechkout</b>: Menu > VCS > checkout from Version Control > Subversion</li>
+            <li><b>Enter Url</b>: <a href="/svn">svn</a></li>
+        </ol>
+		<hr>
+    </div>
+	
+    <h3 onclick="javascript:toggle('p3')">&#9660; Jenkins</h3>
+    <div class="hidden" id="p3">
+        <ol>
+            <li><b>Manage security</b>: <a href="/jenkins/configureSecurity/">/jenkins/configureSecurity/</a></li>
+            <li><b>Add Java to Jenkins</b>: <a href="/jenkins/configure">/jenkins/configure</a> <br>
+              Usually something like "/usr/lib/jvm/java-6-openjdk-amd64/jre/bin/java", find version with: <divre>update-alternatives --config java</pre> 
+              and add jdk with JAVA_JOME here. Automatic install is not needed.<br>
+              <b>Add Ant to Jenkins</b>: just provide a name below JDK configuration.</li>
+            <li><b>Install jacoco plugin</b>: <a href="/jenkins/pluginManager/available">/jenkins/pluginManager/available</a></li>
+            <li><b>Troubleshoot</b> jenkins with <divre>tail -f /var/log/jenkins/jenkins.log</pre></li>
+        </ol>
+		<hr>
+    </div>
+	
+    <h3 onclick="javascript:toggle('p4')">&#9660; Project</h3>
+    A demo project is available here: <a href="https://github.com/draftchallenge/zebra-puzzle">https://github.com/draftchallenge/zebra-puzzle</a><br>
+    This comes with ant, ivy and uni-tests and code-coverage. Simply copy folder structures, build.xml and ivy.xml to your new project.
+    <div class="hidden" id="p4">
+        <ol>
+            <li><b>Open your project</b> from <a href="/jenkins/">Jenkins Dashboard</a>.</li>
+            <li><b>Open configuration</b></li>
+            <li><b>Add SVN support</b> to update project automatically after SVN hook was invoked. Default URL is "http://192.168.56.101/svn" with your username.</li>
+            <li><b>Add Ant support</b>: Select previously chosen name and add target, default is "run-server"</li>
+            <li><b>Manage post-build actions</b>: Following default settings are working:<br>
+            Path to exec files (e.g.: **/target/**.exec, **/jacoco.exec): <b>out/jacoco.exec</b><br>
+            Path to class directories (e.g.: **/target/classDir, **/classes): <b>out</b><br>
+            Path to source directories (e.g.: **/mySourceFiles): <b>src</b><br>
+            Inclusions (e.g.: **/*.class): <b>**/*.class</b><br>
+            Exclusions (e.g.: **/*Test*.class): <b>*Test</b><br>
+            <br>To match project line coverage rate take a look at build.xml. Line coverage usually 80 / 70 and class coverage 100 / 90.<br>
+            Tick on: Change build status according the thresholds
+            </li>
+        </ol>
+		<hr>
+    </div>
+	
+    <h3 onclick="javascript:toggle('p5')">&#9660; Workflow</h3>
+    <div class="hidden" id="p5">
+        <ol>
+            <li><b>SVN and Trac</b>: Create tickets if needed. In case of bug fix or code committed to some certain ticket, start commit message with ticketnumber like 321: <divre>Trac321 more information here.</pre></li>
+            <li><b>SVN and Jenkins</b>: Each commits triggers a build on jenkins. Unit-tests and code-coverage is executed if demo project is used.</li>
+        </ol>
+		<hr>
+    </div>
+    
+    <script>
+        function toggle(ref) {
+		    element = document.getElementById(ref);
+            if(element.style.display == "block") {
+                element.style.display = "none";
+            } else {
+                element.style.display = "block";
+            }
+        }
+    </script>
+</body>
+</html>

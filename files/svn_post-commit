@@ -1,0 +1,6 @@
+#!/bin/sh
+
+REPOS="$1"
+REV="$2"
+
+bash /var/svn/repos/hooks/trac-hook $1 $2

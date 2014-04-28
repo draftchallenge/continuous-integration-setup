@@ -1,0 +1,43 @@
+#!/bin/bash
+
+#$1 = REPO
+#$2 = REV
+
+msg=$(svnlook propget --revprop -r $2 $1 svn:log)
+pattern='Trac([[:digit:]]*)'
+
+if [[ $msg =~ $pattern ]]; then
+    ticketNo="${BASH_REMATCH[1]}"
+else
+    echo "exit: No Trac ticket number found" >&2; exit
+fi
+
+revision=$2
+database="/var/www/trac/repos/db/trac.db"
+text="[$revision] (changeset)"
+author="$(svnlook author -r $2 $1)"
+
+re='^[0-9]+$'
+if ! [[ "$ticketNo" =~ $re ]] ; then
+   echo "exit: No number for trac" >&2; exit
+fi
+
+hasTicket=$(sqlite3 $database "select * from ticket where id = $ticketNo")
+if [ "$hasTicket" = "" ]
+then
+    echo "error: Ticket does not exist" >&2; exit 1
+fi;
+
+commentNo=$(sqlite3 $database "select oldvalue from ticket_change where ticket = $ticketNo order by oldvalue+0 desc limit 1;")
+
+if [ "$commentNo" = "" ]
+then
+    commentNo=1
+else
+    commentNo=${commentNo/[0-9]*./}
+    commentNo=$((commentNo+1))
+fi
+
+$(sqlite3 $database "insert into ticket_change (ticket, time, author, field, oldvalue, newvalue) VALUES ($ticketNo,strftime('%s000000', 'now'),'$author','comment',$commentNo,'$text');")
+
+#sqlite3 $database "select * from ticket_change where ticket = $ticketNo"
